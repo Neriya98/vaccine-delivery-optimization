@@ -85,46 +85,84 @@ export default function DecideurDashboard() {
           )}
         </div>
 
-        {/* Tableau récapitulatif des zones */}
-        <div className="bg-white rounded-xl shadow p-6">
+        {/* Cartes récapitulatives par zone */}
+        <div>
           <h2 className="text-lg font-semibold text-gray-800 mb-4">Récapitulatif par zone</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-gray-500 border-b text-left">
-                  <th className="py-2 pr-4 font-medium">Zone</th>
-                  <th className="py-2 pr-4 font-medium">Région</th>
-                  <th className="py-2 pr-4 font-medium">Département</th>
-                  <th className="py-2 pr-4 font-medium text-right">Centres</th>
-                  <th className="py-2 pr-4 font-medium text-right">Stocks critiques</th>
-                  <th className="py-2 font-medium text-right">Vaccins (30j)</th>
-                </tr>
-              </thead>
-              <tbody>
+          {(() => {
+            const maxVax = Math.max(...zones.map((z) => z.total_vaccines_30j || 0), 1)
+            return (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {zones.map((z) => {
                   const lowStock = z.centres.filter((c) => c.stock_actuel < 20).length
+                  const critical = lowStock > 0
+                  const pct      = Math.round(((z.total_vaccines_30j || 0) / maxVax) * 100)
+
                   return (
-                    <tr key={z.zone_id} className="border-b last:border-0 hover:bg-gray-50">
-                      <td className="py-2 pr-4 font-medium">{z.nom}</td>
-                      <td className="py-2 pr-4 text-gray-600">{z.region}</td>
-                      <td className="py-2 pr-4 text-gray-600">{z.departement}</td>
-                      <td className="py-2 pr-4 text-right">{z.nb_centres}</td>
-                      <td className="py-2 pr-4 text-right">
-                        {lowStock > 0 ? (
-                          <span className="text-red-600 font-semibold">{lowStock}</span>
-                        ) : (
-                          <span className="text-green-600">—</span>
-                        )}
-                      </td>
-                      <td className="py-2 text-right font-semibold text-blue-700">
-                        {z.total_vaccines_30j?.toLocaleString('fr-FR')}
-                      </td>
-                    </tr>
+                    <div
+                      key={z.zone_id}
+                      className={`bg-white rounded-xl shadow border-l-4 p-5 flex flex-col gap-4 ${
+                        critical ? 'border-red-500' : 'border-green-500'
+                      }`}
+                    >
+                      {/* En-tête */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <h3 className="font-bold text-gray-900 leading-tight">{z.nom}</h3>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {z.region}
+                            {z.departement && ` · Dép. ${z.departement}`}
+                          </p>
+                        </div>
+                        <span
+                          className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${
+                            critical
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-green-100 text-green-700'
+                          }`}
+                        >
+                          {critical ? `${lowStock} alerte${lowStock > 1 ? 's' : ''}` : 'OK'}
+                        </span>
+                      </div>
+
+                      {/* Métriques */}
+                      <div className="grid grid-cols-3 divide-x divide-gray-100 text-center">
+                        <div className="pr-2">
+                          <p className="text-2xl font-bold text-gray-800">{z.nb_centres}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">Centres</p>
+                        </div>
+                        <div className="px-2">
+                          <p className={`text-2xl font-bold ${critical ? 'text-red-600' : 'text-gray-300'}`}>
+                            {lowStock}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-0.5">Critiques</p>
+                        </div>
+                        <div className="pl-2">
+                          <p className="text-2xl font-bold text-blue-700">
+                            {(z.total_vaccines_30j || 0).toLocaleString('fr-FR')}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-0.5">Vaccins 30j</p>
+                        </div>
+                      </div>
+
+                      {/* Barre de progression relative */}
+                      <div>
+                        <div className="flex justify-between text-xs text-gray-400 mb-1">
+                          <span>Activité vaccinale</span>
+                          <span>{pct}%</span>
+                        </div>
+                        <div className="w-full bg-gray-100 rounded-full h-2">
+                          <div
+                            className="h-2 rounded-full bg-blue-500 transition-all duration-500"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
                   )
                 })}
-              </tbody>
-            </table>
-          </div>
+              </div>
+            )
+          })()}
         </div>
 
         {/* Grille des centres par zone */}

@@ -1,0 +1,181 @@
+# StreamVax — Contexte projet
+
+Application de visualisation de données vaccinales contre la grippe.
+Hackathon Epitech — Open Data / Santé Publique France.
+
+---
+
+## Arborescence du projet
+
+```
+vaccine-delivery-optimization/
+├── CLAUDE.md
+├── docker-compose.yml
+├── Makefile
+├── StreamVax/
+│   ├── backend/
+│   │   ├── Dockerfile
+│   │   ├── config.py
+│   │   ├── run.py
+│   │   ├── requirements.txt
+│   │   ├── migrations/
+│   │   ├── tests/
+│   │   └── app/
+│   │       ├── __init__.py
+│   │       ├── models/
+│   │       │   ├── alert.py, centre.py, daily_record.py
+│   │       │   ├── prediction.py, stock.py, user.py, zone.py
+│   │       ├── blueprints/api/routes.py
+│   │       └── services/
+│   │           ├── ml_client.py   ← intégration ML ici
+│   │           ├── alert_service.py
+│   │           └── export_service.py
+│   └── frontend/
+│       ├── Dockerfile
+│       ├── nginx.conf
+│       ├── vite.config.js
+│       └── src/
+│           ├── api/client.js      ← base URL API Flask
+│           ├── api/dashboard.js
+│           └── pages/
+│               ├── centre/CentreDashboard.jsx
+│               ├── zone/ZoneDashboard.jsx
+│               └── decideur/DecideurDashboard.jsx
+├── vaccine_route_optimization/    ← module ML
+│   ├── config.py                  ← MODELS_DIR, PROCESSED_DATA_DIR
+│   ├── modeling/
+│   │   ├── predict.py             ← squelette à compléter
+│   │   └── train.py
+│   └── features.py
+├── data/
+│   ├── raw/                       ← open data brutes
+│   ├── processed/                 ← features prêtes pour le modèle
+│   └── external/
+└── models/                        ← model.pkl livré par la team ML
+```
+
+---
+
+## Stack technique
+
+| Couche       | Technologie                              |
+|--------------|------------------------------------------|
+| Backend      | Flask (Python) — `StreamVax/backend/`    |
+| Base données | PostgreSQL · SQLAlchemy · Flask-Migrate  |
+| Auth         | Flask-Login · Flask-Bcrypt               |
+| Frontend     | React + Vite + Tailwind CSS              |
+| Reverse proxy| Nginx                                    |
+| Cartes       | Leaflet.js                               |
+| Graphiques   | Chart.js                                 |
+| ML           | `vaccine_route_optimization/` (Python)   |
+
+---
+
+## Intégration ML — règles importantes
+
+Le modèle ML est géré exclusivement dans `StreamVax/backend/app/services/ml_client.py`.
+
+### Fonctionnement par bascule (variable ML_USE_MOCK dans .env)
+
+```
+ML_USE_MOCK=true   → données fictives réalistes (mode dev, par défaut)
+ML_USE_MOCK=false  → vrai modèle .pkl (quand livré par la team ML)
+```
+
+### Format de sortie attendu de _real_predict()
+
+```python
+[
+  {
+    "date":                "YYYY-MM-DD",
+    "pred_vaccines":       int,   # vaccinations prédites
+    "pred_emergencies":    int,   # urgences prédites
+    "pred_vaccines_month": int,   # cumul mensuel prédit
+    "confidence":          float  # score 0.0 à 1.0
+  },
+  ...  # un dict par jour (days_ahead jours)
+]
+```
+
+### Chemin du modèle
+
+```python
+from vaccine_route_optimization.config import MODELS_DIR, PROCESSED_DATA_DIR
+model_path    = Path(MODELS_DIR) / "model.pkl"
+features_path = Path(PROCESSED_DATA_DIR) / "test_features.csv"
+```
+
+### Ne jamais appeler le ML depuis React
+
+Le frontend appelle uniquement `/api/v1/centres/<id>/predictions`.
+Flask se charge d'appeler le modèle et de stocker en base.
+
+---
+
+## Utilisateurs et rôles
+
+### `centre` — Agent du centre de vaccination
+- Saisie journalière : vaccinés réels, urgences réelles, doses utilisées
+- Consultation des prédictions ML (jour / mois)
+- Alertes : stock bas, risque surcharge, saisie manquante
+
+### `zone` — Point focal
+- Supervise tous les centres de sa zone (1 zone → N centres)
+- Planifie et suit les livraisons : `planifie` → `en_transit` → `livre`
+
+### `decideur` — Ministère
+- Carte Leaflet interactive
+- KPIs agrégés sur 30 jours
+
+---
+
+## Modèles de données
+
+```
+Zone ──< Centre ──< DailyRecord
+                ──< Prediction
+                ──< StockDelivery >── Zone
+                ──< Alert
+User >── Centre (optionnel)
+     >── Zone   (optionnel)
+```
+
+---
+
+## Conteneurisation
+
+```bash
+docker-compose up --build     # build et démarrer
+docker-compose down           # arrêter
+docker-compose logs backend   # logs Flask
+docker-compose logs frontend  # logs Nginx
+```
+
+---
+
+## Commandes utiles
+
+```bash
+cd StreamVax/backend
+flask db migrate -m "description"
+flask db upgrade
+flask seed                         # mot de passe : demo1234
+python run.py
+```
+
+## Comptes de test
+
+| Email              | Rôle     | Mot de passe |
+|--------------------|----------|--------------|
+| centre@demo.fr     | centre   | demo1234     |
+| zone@demo.fr       | zone     | demo1234     |
+| decideur@demo.fr   | decideur | demo1234     |
+
+---
+
+## Points d'attention
+
+- `StreamVax/backend/frontend/` — dossier vide parasite, à supprimer
+- Blueprints `auth`, `centre`, `zone`, `decideur` absents — routes à vérifier dans `api/routes.py`
+- `vaccine_route_optimization/modeling/predict.py` est un squelette —
+  le vrai code de prédiction sera ajouté dans `ml_client.py._real_predict()`

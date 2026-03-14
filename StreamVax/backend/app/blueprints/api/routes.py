@@ -1,3 +1,4 @@
+import os
 from flask import Blueprint, jsonify, request, current_app
 from datetime import date, timedelta, datetime
 from functools import wraps
@@ -237,6 +238,23 @@ def update_delivery_status(lid):
     livraison.statut = statut
     db.session.commit()
     return jsonify(livraison.to_dict())
+
+# -----------  Prédictions global  -----------
+
+@api_bp.route("/predictions/refresh-all", methods=["POST"])
+@token_required
+def refresh_all_predictions():
+    """Rafraîchit les prédictions de tous les centres (décideur ou zone uniquement)."""
+    if request.current_user.role not in ("decideur", "zone"):
+        return jsonify({"error": "Non autorisé"}), 403
+    from app.services.ml_client import fetch_all_predictions
+    results = fetch_all_predictions()
+    failed  = [cid for cid, r in results.items() if not r["ok"]]
+    return jsonify({
+        "refreshed": len(results) - len(failed),
+        "failed":    failed,
+        "mock_mode": os.environ.get("ML_USE_MOCK", "true"),
+    })
 
 # -----------  Dashboard national  -----------
 
