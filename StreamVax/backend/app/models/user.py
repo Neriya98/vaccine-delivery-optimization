@@ -1,8 +1,7 @@
-from app import db, login_manager, bcrypt
-from flask_login import UserMixin
+from app import db, bcrypt
 from datetime import datetime
 
-class User(UserMixin, db.Model):
+class User(db.Model):
     __tablename__ = "users"
     ROLES = ("centre", "zone", "decideur")
 
@@ -22,8 +21,5 @@ class User(UserMixin, db.Model):
         return bcrypt.check_password_hash(self.password, password)
 
     def to_dict(self):
-        return {"id": self.id, "email": self.email, "role": self.role, "nom": self.nom}
-
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
+        return {"id": self.id, "email": self.email, "role": self.role, "nom": self.nom,
+                "centre_id": self.centre_id, "zone_id": self.zone_id}

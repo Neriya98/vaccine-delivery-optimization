@@ -1,14 +1,9 @@
 from app import create_app, db
-from flask import redirect, url_for
 from app.models.user import User
 from app.models.zone import Zone
 from app.models.centre import Centre
 
 app = create_app()
-
-@app.route("/")
-def index():
-    return redirect(url_for("auth.login"))
 
 @app.shell_context_processor
 def make_shell_context():
@@ -17,6 +12,10 @@ def make_shell_context():
 @app.cli.command("seed")
 def seed_db():
     """Insère des données de test."""
+    if User.query.filter_by(email="centre@demo.fr").first():
+        print("Seed déjà effectué — rien à faire.")
+        return
+
     z = Zone(nom="Zone Île-de-France", region="Île-de-France", departement="75")
     db.session.add(z)
     db.session.flush()
