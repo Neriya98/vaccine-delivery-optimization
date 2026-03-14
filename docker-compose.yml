@@ -46,6 +46,8 @@ services:
       - "80:80"            # accès principal : http://localhost
     depends_on:
       - web
+    volumes:
+      - ./StreamVax/frontend:/app   # rechargement à chaud en développement
 
 volumes:
   postgres_data:
