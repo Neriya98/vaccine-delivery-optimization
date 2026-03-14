@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Dashboard Décideur — Vue nationale{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h2 class="mb-4"><i class="bi bi-bar-chart-line"></i> Vue nationale</h2>
+
+    <!-- KPI Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-primary h-100">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle text-muted mb-2">Zones</h6>
+                    <h2 class="card-title text-primary">{{ zones|length }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-info h-100">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle text-muted mb-2">Centres</h6>
+                    <h2 class="card-title text-info">{{ nb_centres }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-success h-100">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle text-muted mb-2">Vaccinations (30j)</h6>
+                    <h2 class="card-title text-success">{{ total_vaccines }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-warning h-100">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle text-muted mb-2">Urgences (30j)</h6>
+                    <h2 class="card-title text-warning">{{ total_emergencies }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <!-- Map -->
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <i class="bi bi-map"></i> Carte des centres
+                </div>
+                <div class="card-body p-0">
+                    <div id="map" style="height: 500px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Zones Summary -->
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <i class="bi bi-list-ul"></i> Zones
+                </div>
+                <ul class="list-group list-group-flush">
+                    {% for zone in zones %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ zone.nom }}</strong>
+                            <br><small class="text-muted">{{ zone.region }} — {{ zone.departement }}</small>
+                        </div>
+                        <span class="badge bg-primary rounded-pill">
+                            {{ zone.centres.count() }} centres
+                        </span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    // Initialize Leaflet map
+    const map = L.map('map').setView([46.603354, 1.888334], 6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Fetch map data
+    fetch('{{ url_for("decideur.map_data") }}')
+        .then(r => r.json())
+        .then(data => {
+            data.forEach(zone => {
+                zone.centres.forEach(centre => {
+                    if (centre.latitude && centre.longitude) {
+                        const marker = L.marker([centre.latitude, centre.longitude]).addTo(map);
+                        marker.bindPopup(`
+                            <strong>${centre.nom}</strong><br>
+                            ${centre.adresse || ''}<br>
+                            <hr class="my-1">
+                            Stock : <strong>${centre.stock_actuel}</strong> doses<br>
+                            Capacité/jour : ${centre.capacite_jour}
+                        `);
+                    }
+                });
+            });
+        });
+</script>
+{% endblock %}
+{% endblock %}

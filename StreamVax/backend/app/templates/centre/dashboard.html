@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}Dashboard Centre — {{ centre.nom }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-hospital"></i> {{ centre.nom }}</h2>
+        <div>
+            <a href="{{ url_for('centre.refresh_predictions') }}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-arrow-clockwise"></i> Rafraîchir prédictions
+            </a>
+        </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-primary h-100">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle text-muted mb-2">Stock actuel</h6>
+                    <h2 class="card-title text-primary">{{ stock_actuel }}</h2>
+                    <small class="text-muted">doses disponibles</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-success h-100">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle text-muted mb-2">Vaccinations (30j)</h6>
+                    <h2 class="card-title text-success">{{ total_vaccines_month }}</h2>
+                    <small class="text-muted">taux couverture : {{ taux_couverture }}%</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-warning h-100">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle text-muted mb-2">Urgences (30j)</h6>
+                    <h2 class="card-title text-warning">{{ total_emergencies_month }}</h2>
+                    <small class="text-muted">cas signalés</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-info h-100">
+                <div class="card-body text-center">
+                    <h6 class="card-subtitle text-muted mb-2">Prédiction demain</h6>
+                    <h2 class="card-title text-info">
+                        {% if pred_tomorrow %}{{ pred_tomorrow.pred_vaccines }}{% else %}—{% endif %}
+                    </h2>
+                    <small class="text-muted">vaccinations prédites</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <!-- Daily Entry Form -->
+        <div class="col-md-5">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <i class="bi bi-pencil-square"></i> Saisie du jour — {{ today.strftime('%d/%m/%Y') }}
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('centre.saisie') }}">
+                        <div class="mb-3">
+                            <label for="vaccines_done" class="form-label">Vaccinations effectuées</label>
+                            <input type="number" class="form-control" id="vaccines_done" name="vaccines_done"
+                                value="{{ record_today.vaccines_done if record_today else 0 }}" min="0" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="emergencies_real" class="form-label">Urgences réelles</label>
+                            <input type="number" class="form-control" id="emergencies_real" name="emergencies_real"
+                                value="{{ record_today.emergencies_real if record_today else 0 }}" min="0" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="stock_used" class="form-label">Doses utilisées</label>
+                            <input type="number" class="form-control" id="stock_used" name="stock_used"
+                                value="{{ record_today.stock_used if record_today else 0 }}" min="0" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="notes" class="form-label">Notes</label>
+                            <textarea class="form-control" id="notes" name="notes"
+                                rows="2">{{ record_today.notes if record_today else '' }}</textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-check-lg"></i> Enregistrer
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Alerts -->
+            {% if alerts %}
+            <div class="card shadow-sm mt-3">
+                <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-exclamation-triangle"></i> Alertes ({{ alerts|length }})</span>
+                    <button class="btn btn-sm btn-outline-dark" onclick="markAlertsRead()">
+                        <i class="bi bi-check-all"></i> Tout marquer lu
+                    </button>
+                </div>
+                <ul class="list-group list-group-flush">
+                    {% for alert in alerts %}
+                    <li class="list-group-item">
+                        <span
+                            class="badge bg-{{ 'danger' if alert.type == 'stock_low' else 'warning' if alert.type == 'surge_risk' else 'info' }} me-2">
+                            {{ alert.type }}
+                        </span>
+                        {{ alert.message }}
+                        <small class="text-muted d-block">{{ alert.created_at.strftime('%d/%m %H:%M') }}</small>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Chart -->
+        <div class="col-md-7">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <i class="bi bi-graph-up"></i> Historique des 30 derniers jours
+                </div>
+                <div class="card-body">
+                    <canvas id="historyChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+<script>
+    // Mark alerts as read
+    function markAlertsRead() {
+        fetch('{{ url_for("centre.mark_alerts_read") }}', { method: 'POST' })
+            .then(() => location.reload());
+    }
+
+    // History chart
+    const historyData = {{ history | tojson }};
+    if (historyData.length > 0) {
+        const ctx = document.getElementById('historyChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: historyData.map(r => r.date),
+                datasets: [
+                    {
+                        label: 'Vaccinations',
+                        data: historyData.map(r => r.vaccines_done),
+                        borderColor: '#0d6efd',
+                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                        fill: true,
+                        tension: 0.3,
+                    },
+                    {
+                        label: 'Urgences',
+                        data: historyData.map(r => r.emergencies_real),
+                        borderColor: '#ffc107',
+                        backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                        fill: true,
+                        tension: 0.3,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'top' } },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+    }
+</script>
+{% endblock %}
+{% endblock %}
